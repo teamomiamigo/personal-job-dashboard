@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Personal Job Dashboard API
+
+Globals:
+  Function:
+    Timeout: 10
+    Runtime: nodejs20.x
+    Environment:
+      Variables:
+        JOBS_TABLE_NAME: !Ref JobsTable
+
+Resources:
+  # DynamoDB Table
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: jobs
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: jobId
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: followupDate
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: jobId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: status-index
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: followupDate-index
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: followupDate
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # API Gateway
+  JobsApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+
+  # Lambda Functions
+  CreateJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/create-job/
+      Handler: index.handler
+      Events:
+        CreateJob:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobsApi
+            Path: /jobs
+            Method: post
+
+  GetJobsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/get-jobs/
+      Handler: index.handler
+      Events:
+        GetJobs:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobsApi
+            Path: /jobs
+            Method: get
+
+  GetJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/get-job/
+      Handler: index.handler
+      Events:
+        GetJob:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobsApi
+            Path: /jobs/{id}
+            Method: get
+
+  UpdateJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/update-job/
+      Handler: index.handler
+      Events:
+        UpdateJob:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobsApi
+            Path: /jobs/{id}
+            Method: put
+
+  DeleteJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/delete-job/
+      Handler: index.handler
+      Events:
+        DeleteJob:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobsApi
+            Path: /jobs/{id}
+            Method: delete
+
+Outputs:
+  JobsApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${JobsApi}.execute-api.${AWS::Region}.amazonaws.com/prod/'
+  JobsTableName:
+    Description: DynamoDB Table Name
+    Value: !Ref JobsTable
+
